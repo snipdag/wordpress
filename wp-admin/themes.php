@@ -35,22 +35,28 @@ if ( current_user_can( 'switch_themes' ) && isset($_GET['action'] ) ) {
 $title = __('Manage Themes');
 $parent_file = 'themes.php';
 
-if ( current_user_can( 'switch_themes' ) ) :
+// Help tab: Overview
+if ( current_user_can( 'switch_themes' ) ) {
+	$help_overview  = '<p>' . __( 'This screen is used for managing your installed themes. Aside from the default theme(s) included with your WordPress installation, themes are designed and developed by third parties.' ) . '</p>' .
+		'<p>' . __( 'From this screen you can:' ) . '</p>' .
+		'<ul><li>' . __( 'Hover or tap to see Activate and Live Preview buttons' ) . '</li>' .
+		'<li>' . __( 'Click on the theme to see the theme name, version, author, description, tags, and the Delete link' ) . '</li>' .
+		'<li>' . __( 'Click Customize for the current theme or Live Preview for any other theme to see a live preview' ) . '</li></ul>' .
+		'<p>' . __( 'The current theme is displayed highlighted as the first theme.' ) . '</p>';
 
-$help_manage = '<p>' . __('Aside from the default theme included with your WordPress installation, themes are designed and developed by third parties.') . '</p>' .
-	'<p>' . __('You can see your active theme at the top of the screen. Below are the other themes you have installed that are not currently in use. You can see what your site would look like with one of these themes by clicking the Live Preview link (see "Previewing and Customizing" help tab). To change themes, click the Activate link.') . '</p>';
+	get_current_screen()->add_help_tab( array(
+		'id'      => 'overview',
+		'title'   => __( 'Overview' ),
+		'content' => $help_overview
+	) );
+} // switch_themes
 
-get_current_screen()->add_help_tab( array(
-	'id'      => 'overview',
-	'title'   => __('Overview'),
-	'content' => $help_manage
-) );
-
+// Help tab: Adding Themes
 if ( current_user_can( 'install_themes' ) ) {
 	if ( is_multisite() ) {
 		$help_install = '<p>' . __('Installing themes on Multisite can only be done from the Network Admin section.') . '</p>';
 	} else {
-		$help_install = '<p>' . sprintf( __('If you would like to see more themes to choose from, click on the &#8220;Install Themes&#8221; tab and you will be able to browse or search for additional themes from the <a href="%s" target="_blank">WordPress.org Theme Directory</a>. Themes in the WordPress.org Theme Directory are designed and developed by third parties, and are compatible with the license WordPress uses. Oh, and they&#8217;re free!'), 'http://wordpress.org/themes/' ) . '</p>';
+		$help_install = '<p>' . sprintf( __('If you would like to see more themes to choose from, click on the &#8220;Add New&#8221; button and you will be able to browse or search for additional themes from the <a href="%s" target="_blank">WordPress.org Theme Directory</a>. Themes in the WordPress.org Theme Directory are designed and developed by third parties, and are compatible with the license WordPress uses. Oh, and they&#8217;re free!'), 'http://wordpress.org/themes/' ) . '</p>';
 	}
 
 	get_current_screen()->add_help_tab( array(
@@ -58,28 +64,26 @@ if ( current_user_can( 'install_themes' ) ) {
 		'title'   => __('Adding Themes'),
 		'content' => $help_install
 	) );
-}
+} // install_themes
 
-endif; // switch_themes
-
+// Help tab: Previewing and Customizing
 if ( current_user_can( 'edit_theme_options' ) ) {
 	$help_customize =
-		'<p>' . __('Click on the "Live Preview" link under any theme to preview that theme and change theme options in a separate, full-screen view. Any installed theme can be previewed and customized in this way.') . '</p>'.
-		'<p>' . __('The theme being previewed is fully interactive &mdash; navigate to different pages to see how the theme handles posts, archives, and other page templates.') . '</p>' .
-		'<p>' . __('In the left-hand pane you can edit the theme settings. The settings will differ, depending on what theme features the theme being previewed supports. To accept the new settings and activate the theme all in one step, click the "Save &amp; Activate" button at the top of the left-hand pane.') . '</p>' .
-		'<p>' . __('When previewing on smaller monitors, you can use the "Collapse" icon at the bottom of the left-hand pane. This will hide the pane, giving you more room to preview your site in the new theme. To bring the pane back, click on the Collapse icon again.') . '</p>';
+		'<p>' . __( 'Tap or hover on any theme then click the Live Preview button to see a live preview of that theme and change theme options in a separate, full-screen view. You can also find a Live Preview button at the bottom of the theme details screen. Any installed theme can be previewed and customized in this way.' ) . '</p>'.
+		'<p>' . __( 'The theme being previewed is fully interactive &mdash; navigate to different pages to see how the theme handles posts, archives, and other page templates. The settings may differ depending on what theme features the theme being previewed supports. To accept the new settings and activate the theme all in one step, click the Save &amp; Activate button above the menu.' ) . '</p>' .
+		'<p>' . __( 'When previewing on smaller monitors, you can use the collapse icon at the bottom of the left-hand pane. This will hide the pane, giving you more room to preview your site in the new theme. To bring the pane back, click on the collapse icon again.' ) . '</p>';
 
 	get_current_screen()->add_help_tab( array(
 		'id'		=> 'customize-preview-themes',
-		'title'		=> __('Previewing and Customizing'),
+		'title'		=> __( 'Previewing and Customizing' ),
 		'content'	=> $help_customize
 	) );
-}
+} // edit_theme_options
 
 get_current_screen()->set_help_sidebar(
-	'<p><strong>' . __('For more information:') . '</strong></p>' .
-	'<p>' . __('<a href="http://codex.wordpress.org/Using_Themes" target="_blank">Documentation on Using Themes</a>') . '</p>' .
-	'<p>' . __('<a href="http://wordpress.org/support/" target="_blank">Support Forums</a>') . '</p>'
+	'<p><strong>' . __( 'For more information:' ) . '</strong></p>' .
+	'<p>' . __( '<a href="http://codex.wordpress.org/Using_Themes" target="_blank">Documentation on Using Themes</a>' ) . '</p>' .
+	'<p>' . __( '<a href="http://wordpress.org/support/" target="_blank">Support Forums</a>' ) . '</p>'
 );
 
 if ( current_user_can( 'switch_themes' ) ) {
@@ -87,37 +91,40 @@ if ( current_user_can( 'switch_themes' ) ) {
 } else {
 	$themes = wp_prepare_themes_for_js( array( wp_get_theme() ) );
 }
+wp_reset_vars( array( 'theme', 'search' ) );
 
 wp_localize_script( 'theme', '_wpThemeSettings', array(
 	'themes'   => $themes,
 	'settings' => array(
-		'install_uri'   => admin_url( 'theme-install.php' ),
-		'customizeURI'  => ( current_user_can( 'edit_theme_options' ) ) ? wp_customize_url() : null,
+		'canInstall'    => ( ! is_multisite() && current_user_can( 'install_themes' ) ),
+		'installURI'    => ( ! is_multisite() && current_user_can( 'install_themes' ) ) ? admin_url( 'theme-install.php' ) : null,
 		'confirmDelete' => __( "Are you sure you want to delete this theme?\n\nClick 'Cancel' to go back, 'OK' to confirm the delete." ),
-		'root'          => '/wp-admin/themes.php',
-		'container'     => '#appearance',
-		'extraRoutes'   => '',
+		'root'          => parse_url( admin_url( 'themes.php' ), PHP_URL_PATH ),
+		'theme'         => esc_html( $theme ),
+		'search'        => esc_html( $search ),
+
 	),
-	'i18n' => array(
-		'add_new'         => __( 'Add New Theme' ),
-	),
+ 	'l10n' => array(
+ 		'addNew' => __( 'Add New Theme' ),
+ 		'search'  => __( 'Search Installed Themes' ),
+ 		'searchPlaceholder' => __( 'Search installed themes...' ),
+  	),
 ) );
 
-wp_enqueue_style( 'theme' );
+add_thickbox();
 wp_enqueue_script( 'theme' );
 wp_enqueue_script( 'customize-loader' );
 
 require_once( ABSPATH . 'wp-admin/admin-header.php' );
 ?>
 
-<div id="appearance" class="wrap">
+<div class="wrap">
 	<h2><?php esc_html_e( 'Themes' ); ?>
-		<span id="theme-count" class="theme-count"></span>
+		<span class="theme-count"><?php echo count( $themes ); ?></span>
 	<?php if ( ! is_multisite() && current_user_can( 'install_themes' ) ) : ?>
 		<a href="<?php echo admin_url( 'theme-install.php' ); ?>" class="add-new-h2"><?php echo esc_html( _x( 'Add New', 'Add new theme' ) ); ?></a>
 	<?php endif; ?>
 	</h2>
-
 <?php
 if ( ! validate_current_theme() || isset( $_GET['broken'] ) ) : ?>
 <div id="message1" class="updated"><p><?php _e('The active theme is broken. Reverting to the default theme.'); ?></p></div>
@@ -142,10 +149,10 @@ if ( $ct->errors() && ( ! is_multisite() || current_user_can( 'manage_network_th
 // Certain error codes are less fatal than others. We can still display theme information in most cases.
 if ( ! $ct->errors() || ( 1 == count( $ct->errors()->get_error_codes() )
 	&& in_array( $ct->errors()->get_error_code(), array( 'theme_no_parent', 'theme_parent_invalid', 'theme_no_index' ) ) ) ) : ?>
+*/
 
-	<?php
 	// Pretend you didn't see this.
-	$options = array();
+	$current_theme_actions = array();
 	if ( is_array( $submenu ) && isset( $submenu['themes.php'] ) ) {
 		foreach ( (array) $submenu['themes.php'] as $item) {
 			$class = '';
@@ -158,33 +165,84 @@ if ( ! $ct->errors() || ( 1 == count( $ct->errors()->get_error_codes() )
 				$submenu[$item[2]] = array_values($submenu[$item[2]]); // Re-index.
 				$menu_hook = get_plugin_page_hook($submenu[$item[2]][0][2], $item[2]);
 				if ( file_exists(WP_PLUGIN_DIR . "/{$submenu[$item[2]][0][2]}") || !empty($menu_hook))
-					$options[] = "<a href='admin.php?page={$submenu[$item[2]][0][2]}'$class>{$item[0]}</a>";
+					$current_theme_actions[] = "<a class='button button-secondary' href='admin.php?page={$submenu[$item[2]][0][2]}'$class>{$item[0]}</a>";
 				else
-					$options[] = "<a href='{$submenu[$item[2]][0][2]}'$class>{$item[0]}</a>";
+					$current_theme_actions[] = "<a class='button button-secondary' href='{$submenu[$item[2]][0][2]}'$class>{$item[0]}</a>";
 			} else if ( current_user_can($item[1]) ) {
 				$menu_file = $item[2];
 				if ( false !== ( $pos = strpos( $menu_file, '?' ) ) )
 					$menu_file = substr( $menu_file, 0, $pos );
 				if ( file_exists( ABSPATH . "wp-admin/$menu_file" ) ) {
-					$options[] = "<a href='{$item[2]}'$class>{$item[0]}</a>";
+					$current_theme_actions[] = "<a class='button button-secondary' href='{$item[2]}'$class>{$item[0]}</a>";
 				} else {
-					$options[] = "<a href='themes.php?page={$item[2]}'$class>{$item[0]}</a>";
+					$current_theme_actions[] = "<a class='button button-secondary' href='themes.php?page={$item[2]}'$class>{$item[0]}</a>";
 				}
 			}
 		}
 	}
-*/
+
 ?>
+
+<div class="theme-browser">
+	<div class="themes">
+
+<?php
+/*
+ * This PHP is synchronized with the tmpl-theme template below!
+ */
+
+foreach ( $themes as $theme ) : ?>
+<div class="theme<?php if ( $theme['active'] ) echo ' active'; ?>">
+	<?php if ( ! empty( $theme['screenshot'][0] ) ) { ?>
+		<div class="theme-screenshot">
+			<img src="<?php echo $theme['screenshot'][0]; ?>" alt="" />
+		</div>
+	<?php } else { ?>
+		<div class="theme-screenshot blank"></div>
+	<?php } ?>
+	<span class="more-details"><?php _e( 'Theme Details' ); ?></span>
+	<div class="theme-author"><?php printf( __( 'By %s' ), $theme['author'] ); ?></div>
+
+	<?php if ( $theme['active'] ) { ?>
+		<h3 class="theme-name"><span><?php _ex( 'Active:', 'theme' ); ?></span> <?php echo $theme['name']; ?></h3>
+	<?php } else { ?>
+		<h3 class="theme-name"><?php echo $theme['name']; ?></h3>
+	<?php } ?>
+
+	<div class="theme-actions">
+
+	<?php if ( $theme['active'] ) { ?>
+		<?php if ( $theme['actions']['customize'] ) { ?>
+			<a class="button button-primary customize load-customize hide-if-no-customize" href="<?php echo $theme['actions']['customize']; ?>"><?php _e( 'Customize' ); ?></a>
+		<?php } ?>
+	<?php } else { ?>
+		<a class="button button-primary activate" href="<?php echo $theme['actions']['activate']; ?>"><?php _e( 'Activate' ); ?></a>
+		<a class="button button-secondary load-customize hide-if-no-customize" href="<?php echo $theme['actions']['customize']; ?>"><?php _e( 'Live Preview' ); ?></a>
+		<a class="button button-secondary hide-if-customize" href="<?php echo $theme['actions']['preview']; ?>"><?php _e( 'Preview' ); ?></a>
+	<?php } ?>
+
+	</div>
+
+	<?php if ( $theme['hasUpdate'] ) { ?>
+		<div class="theme-update"><?php _e( 'Update Available' ); ?></div>
+	<?php } ?>
+</div>
+<?php endforeach; ?>
+	<br class="clear" />
+	</div>
+</div>
+<div class="theme-overlay"></div>
 
 <?php
 // List broken themes, if any.
 if ( ! is_multisite() && current_user_can('edit_themes') && $broken_themes = wp_get_themes( array( 'errors' => true ) ) ) {
 ?>
 
+<div class="broken-themes">
 <h3><?php _e('Broken Themes'); ?></h3>
 <p><?php _e('The following themes are installed but incomplete. Themes must have a stylesheet and a template.'); ?></p>
 
-<table id="broken-themes">
+<table>
 	<tr>
 		<th><?php _ex('Name', 'theme name'); ?></th>
 		<th><?php _e('Description'); ?></th>
@@ -193,114 +251,119 @@ if ( ! is_multisite() && current_user_can('edit_themes') && $broken_themes = wp_
 	foreach ( $broken_themes as $broken_theme ) {
 		echo "
 		<tr>
-			 <td>" . $broken_theme->get('Name') ."</td>
+			 <td>" . ( $broken_theme->get( 'Name' ) ? $broken_theme->get( 'Name' ) : $broken_theme->get_stylesheet() ) . "</td>
 			 <td>" . $broken_theme->errors()->get_error_message() . "</td>
 		</tr>";
 	}
 ?>
 </table>
+</div>
+
 <?php
 }
 ?>
 </div><!-- .wrap -->
 
+<?php
+/*
+ * The tmpl-theme template is synchronized with PHP above!
+ */
+?>
 <script id="tmpl-theme" type="text/template">
-	<div class="theme-screenshot">
-		<img src="{{ data.screenshot[0] }}" alt="" />
-	</div>
-	<div class="theme-author"><?php printf( __( 'By %s' ), '{{ data.author }}' ); ?></div>
-	<h3 class="theme-name">{{ data.name }}</h3>
+	<# if ( data.screenshot[0] ) { #>
+		<div class="theme-screenshot">
+			<img src="{{ data.screenshot[0] }}" alt="" />
+		</div>
+	<# } else { #>
+		<div class="theme-screenshot blank"></div>
+	<# } #>
+	<span class="more-details"><?php _e( 'Theme Details' ); ?></span>
+	<div class="theme-author"><?php printf( __( 'By %s' ), '{{{ data.author }}}' ); ?></div>
+
+	<# if ( data.active ) { #>
+		<h3 class="theme-name"><span><?php _ex( 'Active:', 'theme' ); ?></span> {{{ data.name }}}</h3>
+	<# } else { #>
+		<h3 class="theme-name">{{{ data.name }}}</h3>
+	<# } #>
+
 	<div class="theme-actions">
 
 	<# if ( data.active ) { #>
-		<span class="current-label"><?php _e( 'Current Theme' ); ?></span>
-		<# if ( wp.themes.data.settings['customizeURI'] ) { #>
-			<a class="button button-primary hide-if-no-customize" href="{{ wp.themes.data.settings['customizeURI'] }}"><?php _e( 'Customize' ); ?></a>
+		<# if ( data.actions.customize ) { #>
+			<a class="button button-primary customize load-customize hide-if-no-customize" href="{{ data.actions.customize }}"><?php _e( 'Customize' ); ?></a>
 		<# } #>
 	<# } else { #>
-		<a class="button button-primary activate" href="{{{ data.actions['activate'] }}}"><?php _e( 'Activate' ); ?></a>
-		<a class="button button-secondary preview" href="{{{ data.actions['customize'] }}}"><?php _e( 'Live Preview' ); ?></a>
+		<a class="button button-primary activate" href="{{{ data.actions.activate }}}"><?php _e( 'Activate' ); ?></a>
+		<a class="button button-secondary load-customize hide-if-no-customize" href="{{{ data.actions.customize }}}"><?php _e( 'Live Preview' ); ?></a>
+		<a class="button button-secondary hide-if-customize" href="{{{ data.actions.preview }}}"><?php _e( 'Preview' ); ?></a>
 	<# } #>
 
 	</div>
 
 	<# if ( data.hasUpdate ) { #>
-		<a class="theme-update"><?php _e( 'Update Available' ); ?></a>
+		<div class="theme-update"><?php _e( 'Update Available' ); ?></div>
 	<# } #>
-
-	<# if ( ! data.active ) { #>
-		<a href="{{{ data.actions.delete }}}" class="delete-theme"><?php _e( 'Delete' ); ?></a>
-	<# } #>
-</script>
-
-<script id="tmpl-theme-search" type="text/template">
-	<input type="text" name="theme-search" id="theme-search" placeholder="<?php esc_attr_e( 'Search...' ); ?>" />
 </script>
 
 <script id="tmpl-theme-single" type="text/template">
 	<div class="theme-backdrop"></div>
 	<div class="theme-wrap">
-		<div class="theme-utility">
-			<div alt="<?php _e( 'Close overlay' ); ?>" class="back dashicons dashicons-no"></div>
+		<div class="theme-header">
+			<div alt="<?php _e( 'Close overlay' ); ?>" class="close dashicons dashicons-no"></div>
 			<div alt="<?php _e( 'Show previous theme' ); ?>" class="left dashicons dashicons-no"></div>
 			<div alt="<?php _e( 'Show next theme' ); ?>" class="right dashicons dashicons-no"></div>
 		</div>
-
-		<div class="theme-screenshots" id="theme-screenshots">
-			<div class="screenshot first"><img src="{{ data.screenshot[0] }}" alt="" /></div>
-		<#
-			if ( _.size( data.screenshot ) > 1 ) {
-				_.each ( data.screenshot, function( image ) {
-		#>
-				<div class="screenshot thumb"><img src="{{ image }}" alt="" /></div>
-		<#
-				});
-			}
-		#>
-		</div>
-
-		<div class="theme-info">
-			<# if ( data.active ) { #>
-				<span class="current-label"><?php _e( 'Current Theme' ); ?></span>
+		<div class="theme-about">
+			<div class="theme-screenshots">
+			<# if ( data.screenshot[0] ) { #>
+				<div class="screenshot"><img src="{{ data.screenshot[0] }}" alt="" /></div>
+			<# } else { #>
+				<div class="screenshot blank"></div>
 			<# } #>
-			<h3 class="theme-name">{{ data.name }}<span class="theme-version"><?php _e('Version: '); ?> {{ data.version }}</span></h3>
-			<h4 class="theme-author"><?php printf( __( 'By %s' ), '<a href="{{ data.authorURI }}">{{ data.author }}</a>' ); ?></h4>
-
-			<# if ( data.hasUpdate ) { #>
-			<div class="theme-update-message">
-				<a class="theme-update"><?php _e( 'Update Available' ); ?></a>
-				<p>{{{ data.update }}}</p>
 			</div>
-			<# } #>
-			<p class="theme-description">{{{ data.description }}}</p>
 
-			<# if ( data.parent ) { #>
-				<p class="parent-theme"><?php printf( __( 'This is a child theme of <strong>%s</strong>.' ), '{{ data.parent }}' ); ?></p>
-			<# } #>
+			<div class="theme-info">
+				<# if ( data.active ) { #>
+					<span class="current-label"><?php _e( 'Current Theme' ); ?></span>
+				<# } #>
+				<h3 class="theme-name">{{{ data.name }}}<span class="theme-version"><?php printf( __( 'Version: %s' ), '{{{ data.version }}}' ); ?></span></h3>
+				<h4 class="theme-author"><?php printf( __( 'By %s' ), '{{{ data.authorAndUri }}}' ); ?></h4>
 
-			<# if ( data.tags.length !== 0 ) { #>
-				<p class="theme-tags">
-					<span><?php _e( 'Tags:' ); ?></span>
-					{{{ data.tags.join( ', ' ).replace( /-/g, ' ' ) }}}
-				</p>
+				<# if ( data.hasUpdate ) { #>
+				<div class="theme-update-message">
+					<h4 class="theme-update"><?php _e( 'Update Available' ); ?></h4>
+					{{{ data.update }}}
+				</div>
+				<# } #>
+				<p class="theme-description">{{{ data.description }}}</p>
+
+				<# if ( data.parent ) { #>
+					<p class="parent-theme"><?php printf( __( 'This is a child theme of %s.' ), '<strong>{{{ data.parent }}}</strong>' ); ?></p>
+				<# } #>
+
+				<# if ( data.tags ) { #>
+					<p class="theme-tags"><span><?php _e( 'Tags:' ); ?></span> {{{ data.tags }}}</p>
+				<# } #>
+			</div>
+		</div>
+
+		<div class="theme-actions">
+			<div class="active-theme">
+				<a href="{{{ data.actions.customize }}}" class="button button-primary customize load-customize hide-if-no-customize"><?php _e( 'Customize' ); ?></a>
+				<?php echo implode( ' ', $current_theme_actions ); ?>
+			</div>
+			<div class="inactive-theme">
+				<# if ( data.actions.activate ) { #>
+					<a href="{{{ data.actions.activate }}}" class="button button-primary activate"><?php _e( 'Activate' ); ?></a>
+				<# } #>
+				<a href="{{{ data.actions.customize }}}" class="button button-secondary load-customize hide-if-no-customize"><?php _e( 'Live Preview' ); ?></a>
+				<a href="{{{ data.actions.preview }}}" class="button button-secondary hide-if-customize"><?php _e( 'Preview' ); ?></a>
+			</div>
+
+			<# if ( ! data.active && data.actions['delete'] ) { #>
+				<a href="{{{ data.actions['delete'] }}}" class="button button-secondary delete-theme"><?php _e( 'Delete' ); ?></a>
 			<# } #>
 		</div>
-	</div>
-
-	<div class="theme-actions">
-		<div class="active-theme">
-			<a href="{{{ wp.themes.data.settings.customizeURI }}}" class="button button-primary hide-if-no-customize"><?php _e( 'Customize' ); ?></a>
-			<a class="button button-secondary" href="<?php echo admin_url( 'nav-menus.php' ); ?>"><?php _e( 'Menus' ); ?></a>
-			<a class="button button-secondary" href="<?php echo admin_url( 'widgets.php' ); ?>"><?php _e( 'Widgets' ); ?></a>
-		</div>
-		<div class="inactive-theme">
-			<a href="{{{ data.actions.activate }}}" class="button button-primary"><?php _e( 'Activate' ); ?></a>
-			<a href="{{{ data.actions.customize }}}" class="button button-secondary"><?php _e( 'Live Preview' ); ?></a>
-		</div>
-
-		<# if ( ! data.active ) { #>
-			<a href="{{{ data.actions.delete }}}" class="delete-theme"><?php _e( 'Delete' ); ?></a>
-		<# } #>
 	</div>
 </script>
 

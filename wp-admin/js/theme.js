@@ -4,11 +4,13 @@ window.wp = window.wp || {};
 ( function($) {
 
 // Set up our namespace...
-var themes = wp.themes = wp.themes || {};
+var themes, l10n;
+themes = wp.themes = wp.themes || {};
 
 // Store the theme data and settings for organized and quick access
-// themes.data.settings, themes.data.themes, themes.data.i18n
+// themes.data.settings, themes.data.themes, themes.data.l10n
 themes.data = _wpThemeSettings;
+l10n = themes.data.l10n;
 
 // Setup app structure
 _.extend( themes, { model: {}, view: {}, routes: {}, router: {}, template: wp.template });
@@ -17,40 +19,22 @@ themes.model = Backbone.Model.extend({});
 
 // Main view controller for themes.php
 // Unifies and renders all available views
-//
-// Hooks to #appearance and organizes the views to be rendered
 themes.view.Appearance = wp.Backbone.View.extend({
 
-	// Set DOM container
-	// {#appearance} by default
-	el: themes.data.settings.container,
+	el: '#wpbody-content .wrap .theme-browser',
 
 	window: $( window ),
 	// Pagination instance
 	page: 0,
 
-	events: {
-		'click .themes-bulk-edit': 'editMode',
-		'click .theme .delete-theme': 'deleteTheme'
-	},
-
 	// Sets up a throttler for binding to 'scroll'
 	initialize: function() {
-		var self = this;
+		// Scroller checks how far the scroll position is
+		_.bindAll( this, 'scroller' );
 
-		// Keep a boolean check so that we don't run
-		// too much code on every event trigger
-		this.window.bind( 'scroll.themes', function() {
-			this.throttle = true;
-		});
-
-		setInterval( function() {
-			if ( this.throttle ) {
-				// Once the case is the case, the action occurs and the fact is no more
-				this.throttle = false;
-				self.scroller();
-			}
-		}, 300 );
+		// Bind to the scroll event and throttle
+		// the results from this.scroller
+		this.window.bind( 'scroll', _.throttle( this.scroller, 300 ) );
 	},
 
 	// Main render control
@@ -61,12 +45,14 @@ themes.view.Appearance = wp.Backbone.View.extend({
 			collection: this.collection,
 			parent: this
 		});
+
+		// Render search form.
+		this.search();
+
 		// Render and append
 		this.view.render();
-		this.$el.append( this.view.el );
-
-		// Search form
-		this.search();
+		this.$el.empty().append( this.view.el ).addClass('rendered');
+		this.$el.append( '<br class="clear"/>' );
 	},
 
 	// Search input and view
@@ -75,11 +61,18 @@ themes.view.Appearance = wp.Backbone.View.extend({
 		var view,
 			self = this;
 
+		// Don't render the search if there is only one theme
+		if ( themes.data.themes.length === 1 ) {
+			return;
+		}
+
 		view = new themes.view.Search({ collection: self.collection });
 
 		// Render and append after screen title
 		view.render();
-		self.$el.find( '> h2' ).after( view.el );
+		$('#wpbody h2:first')
+			.append( $.parseHTML( '<label class="screen-reader-text" for="theme-search-input">' + l10n.search + '</label>' ) )
+			.append( view.el );
 	},
 
 	// Checks when the user gets close to the bottom
@@ -95,16 +88,6 @@ themes.view.Appearance = wp.Backbone.View.extend({
 		if ( bottom > threshold ) {
 			this.trigger( 'theme:scroll' );
 		}
-	},
-
-	// Enters edit mode that allows easy access to deleting themes
-	editMode: function() {
-		$( 'body' ).toggleClass( 'edit-mode' );
-		this.$el.find( '.themes-bulk-edit' ).toggleClass( 'mp6-text-highlight' );
-	},
-
-	deleteTheme: function() {
-		return confirm( themes.data.settings.confirmDelete );
 	}
 });
 
@@ -120,6 +103,12 @@ themes.Collection = Backbone.Collection.extend({
 	// Controls searching on the current theme collection
 	// and triggers an update event
 	doSearch: function( value ) {
+
+		// Don't do anything if we've already done this search
+		// Useful because the Search handler fires multiple times per keystroke
+		if ( this.terms === value ) {
+			return;
+		}
 
 		// Updates terms with the value passed
 		this.terms = value;
@@ -138,14 +127,14 @@ themes.Collection = Backbone.Collection.extend({
 		// Trigger an 'update' event
 		this.trigger( 'update' );
 	},
+
 	// Performs a search within the collection
 	// @uses RegExp
 	search: function( term ) {
-		var self = this,
-			match, results, haystack;
+		var match, results, haystack;
 
 		// Start with a full collection
-		self.reset( themes.data.themes );
+		this.reset( themes.data.themes, { silent: true } );
 
 		// The RegExp object to match
 		//
@@ -156,17 +145,17 @@ themes.Collection = Backbone.Collection.extend({
 
 		// Find results
 		// _.filter and .test
-		results = self.filter( function( data ) {
-			haystack = _.union( data.get( 'name' ), data.get( 'author' ), data.get( 'tags' ) );
+		results = this.filter( function( data ) {
+			haystack = _.union( data.get( 'name' ), data.get( 'description' ), data.get( 'author' ), data.get( 'tags' ) );
 
-			if ( match.test( data.get( 'author' ) ) ) {
+			if ( match.test( data.get( 'author' ) ) && term.length > 2 ) {
 				data.set( 'displayAuthor', true );
 			}
 
 			return match.test( haystack );
 		});
 
-		self.reset( results );
+		this.reset( results );
 	},
 
 	// Paginates the collection with a helper method
@@ -198,8 +187,12 @@ themes.view.Theme = wp.Backbone.View.extend({
 	html: themes.template( 'theme' ),
 
 	events: {
-		'click': 'expand'
+		'click': 'expand',
+		'touchend': 'expand',
+		'touchmove': 'preventExpand'
 	},
+
+	touchDrag: false,
 
 	render: function() {
 		var data = this.model.toJSON();
@@ -218,8 +211,6 @@ themes.view.Theme = wp.Backbone.View.extend({
 	activeTheme: function() {
 		if ( this.model.get( 'active' ) ) {
 			this.$el.addClass( 'active' );
-			this.$el.find( '.theme-name' ).addClass( 'mp6-primary' );
-			$( '#theme-overlay' ).addClass( 'active' );
 		}
 	},
 
@@ -228,15 +219,24 @@ themes.view.Theme = wp.Backbone.View.extend({
 	expand: function( event ) {
 		var self = this;
 
+		// Bail if the user scrolled on a touch device
+		if ( this.touchDrag === true ) {
+			return this.touchDrag = false;
+		}
+
 		event = event || window.event;
 
 		// Prevent the modal from showing when the user clicks
 		// one of the direct action buttons
-		if ( $( event.target ).is( '.theme-actions a, .delete-theme' ) ) {
+		if ( $( event.target ).is( '.theme-actions a' ) ) {
 			return;
 		}
 
 		this.trigger( 'theme:expand', self.model.cid );
+	},
+
+	preventExpand: function() {
+		this.touchDrag = true;
 	}
 });
 
@@ -245,7 +245,7 @@ themes.view.Theme = wp.Backbone.View.extend({
 themes.view.Details = wp.Backbone.View.extend({
 
 	// Wrap theme data on a div.theme element
-	id: 'theme-overlay',
+	className: 'theme-overlay',
 
 	events: {
 		'click': 'collapse',
@@ -259,23 +259,20 @@ themes.view.Details = wp.Backbone.View.extend({
 
 	render: function() {
 		var data = this.model.toJSON();
-
 		this.$el.html( this.html( data ) );
 		// Renders active theme styles
 		this.activeTheme();
 		// Set up navigation events
 		this.navigation();
+		// Checks screenshot size
+		this.screenshotCheck( this.$el );
 	},
 
 	// Adds a class to the currently active theme
 	// and to the overlay in detailed view mode
 	activeTheme: function() {
 		// Check the model has the active property
-		if ( this.model.get( 'active' ) ) {
-			this.$el.addClass( 'active' );
-		} else {
-			$( '#theme-overlay' ).removeClass( 'active' );
-		}
+		this.$el.toggleClass( 'active', this.model.get( 'active' ) );
 	},
 
 	// Single theme overlay screen
@@ -286,10 +283,15 @@ themes.view.Details = wp.Backbone.View.extend({
 
 		event = event || window.event;
 
+		// Prevent collapsing detailed view when there is only one theme available
+		if ( themes.data.themes.length === 1 ) {
+			return;
+		}
+
 		// Detect if the click is inside the overlay
 		// and don't close it unless the target was
 		// the div.back button
-		if ( $( event.target ).is( '.theme-backdrop' ) || $( event.target ).is( 'div.back' ) || event.keyCode === 27 ) {
+		if ( $( event.target ).is( '.theme-backdrop' ) || $( event.target ).is( 'div.close' ) || event.keyCode === 27 ) {
 
 			// Add a temporary closing class while overlay fades out
 			$( 'body' ).addClass( 'closing-overlay' );
@@ -297,7 +299,7 @@ themes.view.Details = wp.Backbone.View.extend({
 			// With a quick fade out animation
 			this.$el.fadeOut( 130, function() {
 				// Clicking outside the modal box closes the overlay
-				$( 'body' ).removeClass( 'theme-overlay closing-overlay' );
+				$( 'body' ).removeClass( 'theme-overlay-open closing-overlay' );
 				// Handle event cleanup
 				self.closeOverlay();
 
@@ -305,7 +307,7 @@ themes.view.Details = wp.Backbone.View.extend({
 				scroll = document.body.scrollTop;
 
 				// Clean the url structure
-				themes.router.navigate( '' );
+				themes.router.navigate( themes.router.baseUrl( '' ), { replace: true } );
 
 				// Restore scroll position
 				document.body.scrollTop = scroll;
@@ -313,28 +315,16 @@ themes.view.Details = wp.Backbone.View.extend({
 		}
 	},
 
-	// Handles arrow keys navigation for the overlay
-	// Triggers theme:next and theme:previous events
+	// Handles .disabled classes for next/previous buttons
 	navigation: function() {
-		var self = this;
 
-		$( 'body' ).on( 'keyup', function( event ) {
-
-			// Pressing the right arrow key fires a theme:next event
-			if ( event.keyCode === 39 ) {
-				self.trigger( 'theme:next', self.model.cid );
-			}
-
-			// Pressing the left arrow key fires a theme:previous event
-			if ( event.keyCode === 37 ) {
-				self.trigger( 'theme:previous', self.model.cid );
-			}
-
-			// Pressing the escape key closes the theme details panel
-			if ( event.keyCode === 27 ) {
-				self.collapse();
-			}
-		});
+		// Disable Left/Right when at the start or end of the collection
+		if ( this.model.cid === this.model.collection.at(0).cid ) {
+			this.$el.find( '.left' ).addClass( 'disabled' );
+		}
+		if ( this.model.cid === this.model.collection.at( this.model.collection.length - 1 ).cid ) {
+			this.$el.find( '.right' ).addClass( 'disabled' );
+		}
 	},
 
 	// Performs the actions to effectively close
@@ -343,25 +333,6 @@ themes.view.Details = wp.Backbone.View.extend({
 		this.remove();
 		this.unbind();
 		this.trigger( 'theme:collapse' );
-	},
-
-	// Setups an image gallery using the theme screenshots supplied by a theme
-	screenshotGallery: function() {
-		var screenshots = $( '#theme-screenshots' ),
-			current, img;
-
-		screenshots.find( 'div.first' ).next().addClass( 'selected' );
-
-		// Clicking on a screenshot thumbnail drops it
-		// at the top of the stack in a larger size
-		screenshots.on( 'click', 'div.thumb', function() {
-			current = $( this );
-			img = $( this ).find( 'img' ).clone();
-
-			current.siblings( '.first' ).html( img );
-			current.siblings( '.selected' ).removeClass( 'selected' );
-			current.addClass( 'selected' );
-		});
 	},
 
 	// Confirmation dialoge for deleting a theme
@@ -377,21 +348,37 @@ themes.view.Details = wp.Backbone.View.extend({
 	previousTheme: function() {
 		var self = this;
 		self.trigger( 'theme:previous', self.model.cid );
+	},
+
+	// Checks if the theme screenshot is the old 300px width version
+	// and adds a corresponding class if it's true
+	screenshotCheck: function( el ) {
+		var screenshot, image;
+
+		screenshot = el.find( '.screenshot img' );
+		image = new Image();
+		image.src = screenshot.attr( 'src' );
+
+		// Width check
+		if ( image.width && image.width <= 300 ) {
+			el.addClass( 'small-screenshot' );
+		}
 	}
 });
 
-// Controls the rendering of div#themes,
+// Controls the rendering of div.themes,
 // a wrapper that will hold all the theme elements
 themes.view.Themes = wp.Backbone.View.extend({
 
-	id: 'themes',
+	className: 'themes',
+	$overlay: $( 'div.theme-overlay' ),
 
 	// Number to keep track of scroll position
 	// while in theme-overlay mode
 	index: 0,
 
 	// The theme count element
-	count: $( '#theme-count' ),
+	count: $( '.theme-count' ),
 
 	initialize: function( options ) {
 		var self = this;
@@ -415,6 +402,28 @@ themes.view.Themes = wp.Backbone.View.extend({
 		this.listenTo( this.parent, 'theme:scroll', function() {
 			self.renderThemes( self.parent.page );
 		});
+
+		// Bind keyboard events.
+		$('body').on( 'keyup', function( event ) {
+			if ( ! self.overlay ) {
+				return;
+			}
+
+			// Pressing the right arrow key fires a theme:next event
+			if ( event.keyCode === 39 ) {
+				self.overlay.nextTheme();
+			}
+
+			// Pressing the left arrow key fires a theme:previous event
+			if ( event.keyCode === 37 ) {
+				self.overlay.previousTheme();
+			}
+
+			// Pressing the escape key fires a theme:collapse event
+			if ( event.keyCode === 27 ) {
+				self.overlay.collapse( event );
+			}
+		});
 	},
 
 	// Manages rendering of theme pages
@@ -422,6 +431,22 @@ themes.view.Themes = wp.Backbone.View.extend({
 	render: function() {
 		// Clear the DOM, please
 		this.$el.html( '' );
+
+		// If the user doesn't have switch capabilities
+		// or there is only one theme in the collection
+		// render the detailed view of the active theme
+		if ( themes.data.themes.length === 1 ) {
+
+			// Constructs the view
+			this.singleTheme = new themes.view.Details({
+				model: this.collection.models[0]
+			});
+
+			// Render and apply a 'single-theme' class to our container
+			this.singleTheme.render();
+			this.$el.addClass( 'single-theme' );
+			this.$el.append( this.singleTheme.el );
+		}
 
 		// Generate the themes
 		// Using page instance
@@ -445,7 +470,7 @@ themes.view.Themes = wp.Backbone.View.extend({
 
 		// Make sure the add-new stays at the end
 		if ( page >= 1 ) {
-			$( '#add-new' ).remove();
+			$( '.add-new-theme' ).remove();
 		}
 
 		// Loop through the themes and setup each theme view
@@ -456,7 +481,7 @@ themes.view.Themes = wp.Backbone.View.extend({
 
 			// Render the views...
 			self.theme.render();
-			// and append them to div#themes
+			// and append them to div.themes
 			self.$el.append( self.theme.el );
 
 			// Binds to theme:expand to show the modal box
@@ -465,7 +490,9 @@ themes.view.Themes = wp.Backbone.View.extend({
 		});
 
 		// 'Add new theme' element shown at the end of the grid
-		this.$el.append( '<div id="add-new" class="theme add-new"><a href="' + themes.data.settings.install_uri + '"><div class="theme-screenshot"><span></span></div><h3 class="theme-name">' + themes.data.i18n.add_new + '</h3></a></div>' );
+		if ( themes.data.settings.canInstall ) {
+			this.$el.append( '<div class="theme add-new-theme"><a href="' + themes.data.settings.installURI + '"><div class="theme-screenshot"><span></span></div><h3 class="theme-name">' + l10n.addNew + '</h3></a></div>' );
+		}
 
 		this.parent.page++;
 	},
@@ -498,150 +525,119 @@ themes.view.Themes = wp.Backbone.View.extend({
 		this.model = self.collection.get( id );
 
 		// Trigger a route update for the current model
-		themes.router.navigate( 'theme/' + this.model.id );
+		themes.router.navigate( themes.router.baseUrl( '?theme=' + this.model.id ), { replace: true } );
 
 		// Sets this.view to 'detail'
 		this.setView( 'detail' );
-		$( 'body' ).addClass( 'theme-overlay' );
+		$( 'body' ).addClass( 'theme-overlay-open' );
 
 		// Set up the theme details view
 		this.overlay = new themes.view.Details({
-			model: self.model,
-			className: 'theme-' + self.model.id
+			model: self.model
 		});
 
 		this.overlay.render();
-		this.$el.append( this.overlay.el );
-
-		this.overlay.screenshotGallery();
-
-		// Resets counter whenever the overlay is opened
-		this.index = 0;
+		this.$overlay.html( this.overlay.el );
 
 		// Bind to theme:next and theme:previous
 		// triggered by the arrow keys
 		//
-		// The index keep track of where we are at
-		// any given time
+		// Keep track of the current model so we
+		// can infer an index position
 		this.listenTo( this.overlay, 'theme:next', function() {
-			// Bump the index number to keep track of how far
-			// we should go for the next theme
-			self.index++;
 			// Renders the next theme on the overlay
-			self.next( [ self.model.cid, self.index ] );
-			self.overlay.screenshotGallery();
+			self.next( [ self.model.cid ] );
 
 		})
 		.listenTo( this.overlay, 'theme:previous', function() {
-			// Decrease the index number to keep track of how far
-			// we should go for the previous theme
-			self.index--;
 			// Renders the previous theme on the overlay
-			self.previous( [ self.model.cid, self.index ] );
-			self.overlay.screenshotGallery();
+			self.previous( [ self.model.cid ] );
 		});
-
 	},
 
 	// This method renders the next theme on the overlay modal
 	// based on the current position in the collection
-	// @params [model cid] and [index]
+	// @params [model cid]
 	next: function( args ) {
 		var self = this,
 			model, nextModel;
 
 		// Get the current theme
 		model = self.collection.get( args[0] );
-		// Get the next one
-		nextModel = self.collection.at( self.collection.indexOf( model ) + args[1] );
+		// Find the next model within the collection
+		nextModel = self.collection.at( self.collection.indexOf( model ) + 1 );
 
 		// Sanity check which also serves as a boundary test
 		if ( nextModel !== undefined ) {
 
 			// We have a new theme...
-			// Clean the overlay
-			this.overlay.$el.html('');
-
-			// Create the view
-			this.nextTheme = new themes.view.Details({
-				model: nextModel,
-				className: 'theme-' + nextModel.id
-			});
+			// Close the overlay
+			this.overlay.closeOverlay();
 
 			// Trigger a route update for the current model
-			themes.router.navigate( 'theme/' + nextModel.id );
+			self.theme.trigger( 'theme:expand', nextModel.cid );
 
-			// Render and fill this.overlay with the new html
-			this.nextTheme.render();
-			return this.overlay.$el.html( this.nextTheme.el );
 		}
-
-		// If we got this far it means we have no other themes
-		// so move back the counter to keep it sane
-		self.index--;
 	},
 
 	// This method renders the previous theme on the overlay modal
 	// based on the current position in the collection
-	// @params [model cid] and [index]
+	// @params [model cid]
 	previous: function( args ) {
 		var self = this,
 			model, previousModel;
 
 		// Get the current theme
 		model = self.collection.get( args[0] );
-		previousModel = self.collection.at( self.collection.indexOf( model ) + args[1] );
+		// Find the previous model within the collection
+		previousModel = self.collection.at( self.collection.indexOf( model ) - 1 );
 
 		if ( previousModel !== undefined ) {
 
 			// We have a new theme...
-			// Clean the overlay
-			this.overlay.$el.html( '' );
-
-			// Create the view
-			this.previousTheme = new themes.view.Details({
-				model: previousModel,
-				className: 'theme-' + previousModel.id
-			});
+			// Close the overlay
+			this.overlay.closeOverlay();
 
 			// Trigger a route update for the current model
-			themes.router.navigate( 'theme/' + previousModel.id );
+			self.theme.trigger( 'theme:expand', previousModel.cid );
 
-			// Render and fill this.overlay with the new html
-			this.previousTheme.render();
-			return this.overlay.$el.html( this.previousTheme.el );
 		}
-
-		// If we got this far it means we have no other themes
-		// so move back the counter to keep it sane
-		self.index++;
 	}
 });
 
-// Search input view controller
-// renders #search-form
+// Search input view controller.
 themes.view.Search = wp.Backbone.View.extend({
 
-	className: 'search-form',
+	tagName: 'input',
+	className: 'theme-search',
 
-	// 'keyup' triggers search
+	attributes: {
+		placeholder: l10n.searchPlaceholder,
+		type: 'search'
+	},
+
 	events: {
-		'keyup #theme-search': 'search'
+		'input':  'search',
+		'keyup':  'search',
+		'change': 'search',
+		'search': 'search'
 	},
 
-	// Grabs template file
-	html: themes.template( 'theme-search' ),
+	// Runs a search on the theme collection.
+	search: function( event ) {
+		// Clear on escape.
+		if ( event.type === 'keyup' && event.which === 27 ) {
+			event.target.value = '';
+		}
 
-	// Render the search form
-	render: function() {
-		var self = this;
-		self.$el.html( self.html );
-	},
+		this.collection.doSearch( event.target.value );
 
-	// Runs a search on the theme collection
-	// bind on 'keyup' event
-	search: function() {
-		this.collection.doSearch( $( '#theme-search' ).val() );
+		// Update the URL hash
+		if ( event.target.value ) {
+			themes.router.navigate( themes.router.baseUrl( '?search=' + event.target.value ), { replace: true } );
+		} else {
+			themes.router.navigate( themes.router.baseUrl( '' ), { replace: true } );
+		}
 	}
 });
 
@@ -649,19 +645,15 @@ themes.view.Search = wp.Backbone.View.extend({
 // Listens to [theme] and [search] params
 themes.routes = Backbone.Router.extend({
 
-	routes: {
-		'search/:query': 'search',
-		'theme/:slug': 'theme'
+	initialize: function() {
+		this.routes = _.object([
+		]);
 	},
 
-	// Set the search input value based on url
-	search: function( query ) {
-		$( '#theme-search' ).val( query );
+	baseUrl: function( url ) {
+		return themes.data.settings.root + url;
 	}
 });
-
-// Make routes easily extendable
-_.extend( themes.routes, themes.data.settings.extraRoutes );
 
 // Execute and setup the application
 themes.Run = {
@@ -681,29 +673,30 @@ themes.Run = {
 	render: function() {
 		// Render results
 		this.view.render();
-
-		// Calls the routes functionality
 		this.routes();
 
-		// Set ups history with pushState and our root
-		Backbone.history.start({ root: themes.data.settings.root });
+		// Set the initial theme
+		if ( 'undefined' !== typeof themes.data.settings.theme && '' !== themes.data.settings.theme ){
+			this.view.view.theme.trigger( 'theme:expand', this.view.collection.findWhere( { id: themes.data.settings.theme } ) );
+		}
+
+		// Set the initial search
+		if ( 'undefined' !== typeof themes.data.settings.search && '' !== themes.data.settings.search ){
+			$( '.theme-search' ).val( themes.data.settings.search );
+			this.themes.doSearch( themes.data.settings.search );
+		}
+
+		// Start the router if browser supports History API
+		if ( window.history && window.history.pushState ) {
+			// Calls the routes functionality
+			Backbone.history.start({ pushState: true, silent: true });
+		}
 	},
 
 	routes: function() {
-		var self = this;
 		// Bind to our global thx object
 		// so that the object is available to sub-views
 		themes.router = new themes.routes();
-
-		// Handles theme details route event
-		themes.router.on( 'route:theme', function( slug ) {
-			self.view.view.expand( slug );
-		});
-
-		// Handles search route event
-		themes.router.on( 'route:search', function( query ) {
-			self.themes.doSearch( query );
-		});
 	}
 };
 
@@ -716,3 +709,30 @@ jQuery( document ).ready(
 );
 
 })( jQuery );
+
+// Align theme browser thickbox
+var tb_position;
+jQuery(document).ready( function($) {
+	tb_position = function() {
+		var tbWindow = $('#TB_window'),
+			width = $(window).width(),
+			H = $(window).height(),
+			W = ( 1040 < width ) ? 1040 : width,
+			adminbar_height = 0;
+
+		if ( $('body.admin-bar').length ) {
+			adminbar_height = parseInt( jQuery('#wpadminbar').css('height'), 10 );
+		}
+
+		if ( tbWindow.size() ) {
+			tbWindow.width( W - 50 ).height( H - 45 - adminbar_height );
+			$('#TB_iframeContent').width( W - 50 ).height( H - 75 - adminbar_height );
+			tbWindow.css({'margin-left': '-' + parseInt( ( ( W - 50 ) / 2 ), 10 ) + 'px'});
+			if ( typeof document.body.style.maxWidth !== 'undefined' ) {
+				tbWindow.css({'top': 20 + adminbar_height + 'px', 'margin-top': '0'});
+			}
+		}
+	};
+
+	$(window).resize(function(){ tb_position(); });
+});

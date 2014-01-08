@@ -37,20 +37,24 @@ function wp_dashboard_setup() {
 
 	// Right Now
 	if ( is_blog_admin() && current_user_can('edit_posts') )
-		add_meta_box( 'dash-right-now', 'Site Content', 'dashboard_new_right_now', 'dashboard', 'normal', 'high' );
+		wp_add_dashboard_widget( 'dashboard_right_now', __( 'At a Glance' ), 'wp_dashboard_right_now' );
 
 	if ( is_network_admin() )
 		wp_add_dashboard_widget( 'network_dashboard_right_now', __( 'Right Now' ), 'wp_network_dashboard_right_now' );
 
 	// Activity Widget
-	add_meta_box( 'dashboard_activity', __( 'Activity' ), 'wp_dashboard_activity', 'dashboard', 'normal', 'high' );
+	if ( is_blog_admin() ) {
+		wp_add_dashboard_widget( 'dashboard_activity', __( 'Activity' ), 'wp_dashboard_site_activity' );
+	}
 
 	// QuickPress Widget
-	if ( is_blog_admin() && current_user_can( 'edit_posts' ) )
-		add_meta_box( 'dashboard_quick_draft', __( 'Quick Draft' ), 'wp_dashboard_quick_draft', 'dashboard', 'side', 'high' );
+	if ( is_blog_admin() && current_user_can( 'edit_posts' ) ) {
+		$quick_draft_title = sprintf( '<span class="hide-if-no-js">%1$s</span> <span class="hide-if-js">%2$s</span>', __( 'Quick Draft' ), __( 'Drafts' ) );
+		wp_add_dashboard_widget( 'dashboard_quick_press', $quick_draft_title, 'wp_dashboard_quick_press' );
+	}
 
 	// WordPress News
-	add_meta_box( 'dashboard_rss', __( 'WordPress News' ), 'wp_dashboard_rss', 'dashboard', 'side', 'low' );
+	wp_add_dashboard_widget( 'dashboard_primary', __( 'WordPress News' ), 'wp_dashboard_primary' );
 
 	// Hook to register new widgets
 	// Filter widget order
@@ -104,12 +108,7 @@ function wp_add_dashboard_widget( $widget_id, $widget_name, $callback, $control_
 		}
 	}
 
-	if ( is_blog_admin () )
-		$side_widgets = array('dashboard_quick_draft');
-	else if (is_network_admin() )
-		$side_widgets = array();
-	else
-		$side_widgets = array();
+	$side_widgets = array( 'dashboard_quick_press', 'dashboard_primary' );
 
 	$location = 'normal';
 	if ( in_array($widget_id, $side_widgets) )
@@ -138,10 +137,14 @@ function _wp_dashboard_control_callback( $dashboard, $meta_box ) {
  */
 function wp_dashboard() {
 	$screen = get_current_screen();
-	$class = 'columns-' . get_current_screen()->get_columns();
+	$columns = absint( $screen->get_columns() );
+	$columns_css = '';
+	if ( $columns ) {
+		$columns_css = " columns-$columns";
+	}
 
 ?>
-<div id="dashboard-widgets" class="metabox-holder <?php echo $class; ?>">
+<div id="dashboard-widgets" class="metabox-holder<?php echo $columns_css; ?>">
 	<div id='postbox-container-1' class='postbox-container'>
 	<?php do_meta_boxes( $screen->id, 'normal', '' ); ?>
 	</div>
@@ -164,7 +167,14 @@ function wp_dashboard() {
 
 /* Dashboard Widgets */
 
-function dashboard_new_right_now() {
+/**
+ * Dashboard widget that displays some basic stats about the site.
+ *
+ * Formerly 'Right Now'. A streamlined 'At a Glance' as of 3.8.
+ *
+ * @since 2.7.0
+ */
+function wp_dashboard_right_now() {
 	$theme = wp_get_theme();
 	if ( current_user_can( 'switch_themes' ) )
 		$theme_name = sprintf( '<a href="themes.php">%1$s</a>', $theme->display('Name') );
@@ -174,45 +184,77 @@ function dashboard_new_right_now() {
 	<div class="main">
 	<ul>
 	<?php
-	do_action( 'rightnow_list_start' );
-	// Using show_in_nav_menus as my arg for grabbing what post types should show, is there better?
-	$post_types = get_post_types( array( 'show_in_nav_menus' => true ), 'objects' );
-	$post_types = (array) apply_filters( 'rightnow_post_types', $post_types );
-	foreach ( $post_types as $post_type => $post_type_obj ){
+	// Posts and Pages
+	foreach ( array( 'post', 'page' ) as $post_type ) {
 		$num_posts = wp_count_posts( $post_type );
 		if ( $num_posts && $num_posts->publish ) {
-			printf(
-				'<li class="%1$s-count"><a href="edit.php?post_type=%1$s">%2$s %3$s</a></li>',
-				$post_type,
-				number_format_i18n( $num_posts->publish ),
-				$post_type_obj->label
-			);
+			if ( 'post' == $post_type ) {
+				$text = _n( '%s Post', '%s Posts', $num_posts->publish );
+			} else {
+				$text = _n( '%s Page', '%s Pages', $num_posts->publish );
+			}
+			$text = sprintf( $text, number_format_i18n( $num_posts->publish ) );
+			printf( '<li class="%1$s-count"><a href="edit.php?post_type=%1$s">%2$s</a></li>', $post_type, $text );
 		}
 	}
 	// Comments
 	$num_comm = wp_count_comments();
 	if ( $num_comm && $num_comm->total_comments ) {
-		$text = _n( 'comment', 'comments', $num_comm->total_comments );
-		printf(
-			'<li class="comment-count"><a href="edit-comments.php">%1$s %2$s</a></li>',
-			number_format_i18n( $num_comm->total_comments ),
-			$text
-		);
+		$text = sprintf( _n( '%s Comment', '%s Comments', $num_comm->total_comments ), number_format_i18n( $num_comm->total_comments ) );
+		?>
+		<li class="comment-count"><a href="edit-comments.php"><?php echo $text; ?></a></li>
+		<?php
 		if ( $num_comm->moderated ) {
-			$text = _n( 'in moderation', 'in moderation', $num_comm->total_comments );
-			printf(
-				'<li class="comment-mod-count"><a href="edit-comments.php?comment_status=moderated">%1$s %2$s</a></li>',
-				number_format_i18n( $num_comm->moderated ),
-				$text
-			);
+			/* translators: Number of comments in moderation */
+			$text = sprintf( _nx( '%s in moderation', '%s in moderation', $num_comm->moderated, 'comments' ), number_format_i18n( $num_comm->moderated ) );
+			?>
+			<li class="comment-mod-count"><a href="edit-comments.php?comment_status=moderated"><?php echo $text; ?></a></li>
+			<?php
 		}
 	}
-	do_action( 'rightnow_list_end' );
+
+	/**
+	 * Include additional elements in the 'At a Glance' dashboard widget.
+	 * This widget was previously 'Right Now'.
+	 *
+	 * @since 3.8.0
+	 * @param array $items Array of items.
+	 */
+	$elements = apply_filters( 'dashboard_glance_items', array() );
+	if ( $elements ) {
+		echo '<li>' . implode( "</li>\n<li>", $elements ) . "</li>\n";
+	}
+
 	?>
 	</ul>
 	<p><?php printf( __( 'WordPress %1$s running %2$s theme.' ), get_bloginfo( 'version', 'display' ), $theme_name ); ?></p>
-	</div>
+	<?php
 
+	// Check if search engines are asked not to index this site.
+	if ( ! is_network_admin() && ! is_user_admin() && current_user_can( 'manage_options' ) && '1' != get_option( 'blog_public' ) ) {
+
+		/**
+		 * Filter the title attribute for the link displayed in Site Content metabox when search engines are discouraged from indexing the site.
+		 *
+		 * @since 3.0.0
+		 *
+		 * @param string Default attribute text.
+		 */
+		$title = apply_filters( 'privacy_on_link_title', __( 'Your site is asking search engines not to index its content' ) );
+
+		/**
+		 * Filter the text for the link displayed in Site Content metabox when search engines are discouraged from indexing the site.
+		 *
+		 * @since 3.0.0
+		 *
+		 * @param string Default text.
+		 */
+		$content = apply_filters( 'privacy_on_link_text' , __( 'Search Engines Discouraged' ) );
+
+		echo "<p><a href='options-reading.php' title='$title'>$content</a></p>";
+	}
+	?>
+	</div>
 	<?php
 	// activity_box_end has a core action, but only prints content when multisite.
 	// Using an output buffer is the only way to really check if anything's displayed here.
@@ -276,14 +318,13 @@ function wp_network_dashboard_right_now() {
 }
 
 /**
- * The Quick Draft widget display and creation of drafts
- *
- *
+ * The Quick Draft widget display and creation of drafts.
  *
  * @since 3.8.0
  *
+ * @param string $error_msg Optional. Error message. Default false.
  */
-function wp_dashboard_quick_draft( $error_msg=false ) {
+function wp_dashboard_quick_press( $error_msg = false ) {
 	global $post_ID;
 
 	/* Check if a new auto-draft (= no new post_ID) is needed or if the old can be used */
@@ -305,23 +346,21 @@ function wp_dashboard_quick_draft( $error_msg=false ) {
 	}
 
 	$post_ID = (int) $post->ID;
-
-	do_action( 'dashboard_quickdraft_beginning', $post );
 ?>
 
-	<form name="post" action="<?php echo esc_url( admin_url( 'post.php' ) ); ?>" method="post" id="quick-press" class="initial-form">
+	<form name="post" action="<?php echo esc_url( admin_url( 'post.php' ) ); ?>" method="post" id="quick-press" class="initial-form hide-if-no-js">
 
-		<?php if ($error_msg) : ?>
-		<div class="error"><?php _e( $error_msg ); ?></div>
+		<?php if ( $error_msg ) : ?>
+		<div class="error"><?php echo $error_msg; ?></div>
 		<?php endif; ?>
 
 		<div class="input-text-wrap" id="title-wrap">
-			<label class="screen-reader-text prompt" for="title" id="title-prompt-text"><?php _e( "What's on your mind?" ); ?></label>
+			<label class="screen-reader-text prompt" for="title" id="title-prompt-text"><?php echo apply_filters( 'enter_title_here', __( 'Title' ), $post ); ?></label>
 			<input type="text" name="post_title" id="title" autocomplete="off" />
 		</div>
 
 		<div class="textarea-wrap" id="description-wrap">
-			<label class="screen-reader-text prompt" for="content" id="content-prompt-text"><?php _e( 'Enter a description' ); ?></label>
+			<label class="screen-reader-text prompt" for="content" id="content-prompt-text"><?php _e( 'What&#8217;s on your mind?' ); ?></label>
 			<textarea name="content" id="content" class="mceEditor" rows="3" cols="15"></textarea>
 		</div>
 
@@ -335,65 +374,50 @@ function wp_dashboard_quick_draft( $error_msg=false ) {
 		</p>
 
 	</form>
-
-<?php
-	wp_dashboard_recent_quickdrafts();
-
-	do_action( 'dashboard_quickdraft_end' );
+	<?php
+	wp_dashboard_recent_drafts();
 }
 
 /**
- * Show `Recent Drafts` below Quick Draft form
+ * Show recent drafts of the user on the dashboard.
  *
- *
- *
- * @since 3.8.0
- *
+ * @since 2.7.0
  */
-function wp_dashboard_recent_quickdrafts() {
+function wp_dashboard_recent_drafts( $drafts = false ) {
+	if ( ! $drafts ) {
+		$query_args = array(
+			'post_type'      => 'post',
+			'post_status'    => 'draft',
+			'author'         => get_current_user_id(),
+			'posts_per_page' => 4,
+			'orderby'        => 'modified',
+			'order'          => 'DESC'
+		);
+		$drafts = get_posts( $query_args );
+		if ( ! $drafts ) {
+			return;
+ 		}
+ 	}
 
-	$query_args = array(
-		'post_type'      => 'post',
-		'post_status'    => 'draft',
-		'author'         => $GLOBALS['current_user']->ID,
-		'posts_per_page' => 4,
-		'orderby'        => 'modified',
-		'order'          => 'DESC'
-	);
-	$query_args = apply_filters( 'dash_recent_quickdrafts_query_args', $query_args );
-	$drafts_query = new WP_Query( $query_args );
-	$drafts =& $drafts_query->posts;
+	echo '<div class="drafts">';
+	if ( count( $drafts ) > 3 ) {
+		echo '<p class="view-all"><a href="' . esc_url( admin_url( 'edit.php?post_status=draft' ) ) . '">' . _x( 'View all', 'drafts' ) . "</a></p>\n";
+ 	}
+	echo '<h4 class="hide-if-no-js">' . __( 'Drafts' ) . "</h4>\n<ul>";
 
-
-	if ( $drafts && is_array( $drafts ) ) {
-		$list = array();
-		$draft_count = 0;
-		foreach ( $drafts as $draft ) {
-			if ( 3 == $draft_count )
-				break;
-
-			$draft_count++;
-
-			$url = get_edit_post_link( $draft->ID );
-			$title = _draft_or_post_title( $draft->ID );
-			$item = '<div class="draft-title"><a href="' . $url . '" title="' . sprintf( __( 'Edit &#8220;%s&#8221;' ), esc_attr( $title ) ) . '">' . esc_html( $title ) . '</a> <time datetime="' . get_the_time( 'c', $draft) . '">' . get_the_time( get_option( 'date_format' ), $draft ) . '</time></div>';
-			if ( $the_content = wp_trim_words( $draft->post_content, 10 ) )
-				$item .= '<p>' . $the_content . '</p>';
-			$list[] = $item;
-		}
-
-		do_action( 'dashboard_quickdraft_drafts_list', $drafts );
-?>
-	<div class="drafts">
-		<?php if ( 3 < count($drafts) ) { ?>
-		<p class="view-all"><a href="edit.php?post_status=draft" ><?php _e( 'View all' ); ?></a></p>
-		<?php } ?>
-		<h4><?php _e('Drafts'); ?></h4>
-		<ul id="draft-list">
-			<li><?php echo join( "</li>\n<li>", $list ); ?></li>
-		</ul>
-	</div>
-<?php }
+	$drafts = array_slice( $drafts, 0, 3 );
+	foreach ( $drafts as $draft ) {
+		$url = get_edit_post_link( $draft->ID );
+		$title = _draft_or_post_title( $draft->ID );
+		echo "<li>\n";
+		echo '<div class="draft-title"><a href="' . esc_url( $url ) . '" title="' . esc_attr( sprintf( __( 'Edit &#8220;%s&#8221;' ), $title ) ) . '">' . esc_html( $title ) . '</a>';
+		echo '<time datetime="' . get_the_time( 'c', $draft ) . '">' . get_the_time( get_option( 'date_format' ), $draft ) . '</time></div>';
+		if ( $the_content = wp_trim_words( $draft->post_content, 10 ) ) {
+			echo '<p>' . $the_content . '</p>';
+ 		}
+		echo "</li>\n";
+ 	}
+	echo "</ul>\n</div>";
 }
 
 function _wp_dashboard_recent_comments_row( &$comment, $show_date = true ) {
@@ -490,20 +514,15 @@ function _wp_dashboard_recent_comments_row( &$comment, $show_date = true ) {
 }
 
 /**
- * callback function for `Activity` widget
- *
- *
+ * Callback function for Activity widget.
  *
  * @since 3.8.0
- *
  */
-function wp_dashboard_activity() {
+function wp_dashboard_site_activity() {
 
 	echo '<div id="activity-widget">';
 
-	do_action( 'dashboard_activity_beginning' );
-
-	$future_posts = dashboard_show_published_posts( array(
+	$future_posts = wp_dashboard_recent_posts( array(
 		'display' => 2,
 		'max'     => 5,
 		'status'  => 'future',
@@ -511,7 +530,7 @@ function wp_dashboard_activity() {
 		'title'   => __( 'Publishing Soon' ),
 		'id'      => 'future-posts',
 	) );
-	$recent_posts = dashboard_show_published_posts( array(
+	$recent_posts = wp_dashboard_recent_posts( array(
 		'display' => 2,
 		'max'     => 5,
 		'status'  => 'publish',
@@ -520,9 +539,7 @@ function wp_dashboard_activity() {
 		'id'      => 'published-posts',
 	) );
 
-	do_action( 'dashboard_activity_middle' );
-
-	$recent_comments = dashboard_comments();
+	$recent_comments = wp_dashboard_recent_comments();
 
 	if ( !$future_posts && !$recent_posts && !$recent_comments ) {
 		echo '<div class="no-activity">';
@@ -531,21 +548,27 @@ function wp_dashboard_activity() {
 		echo '</div>';
 	}
 
-	do_action( 'dashboard_activity_end' );
-
 	echo '</div>';
 }
 
 /**
- * Generates `Publishing Soon` and `Recently Published` sections
- *
- *
+ * Generates Publishing Soon and Recently Published sections.
  *
  * @since 3.8.0
  *
+ * @param array $args {
+ *     An array of query and display arguments.
+ *
+ *     @type int    $display Number of posts to display.
+ *     @type int    $max     Maximum number of posts to query.
+ *     @type string $status  Post status.
+ *     @type string $order   Designates ascending ('ASC') or descending ('DESC') order.
+ *     @type string $title   Section title.
+ *     @type string $id      The container id.
+ * }
+ * @return bool False if no posts were found. True otherwise.
  */
-function dashboard_show_published_posts( $args ) {
-
+function wp_dashboard_recent_posts( $args ) {
 	$query_args = array(
 		'post_type'      => 'post',
 		'post_status'    => $args['status'],
@@ -555,7 +578,6 @@ function dashboard_show_published_posts( $args ) {
 		'no_found_rows'  => true,
 		'cache_results'  => false
 	);
-	$query_args = apply_filters( 'dash_show_published_posts_query_args', $query_args );
 	$posts = new WP_Query( $query_args );
 
 	if ( $posts->have_posts() ) {
@@ -563,7 +585,7 @@ function dashboard_show_published_posts( $args ) {
 		echo '<div id="' . $args['id'] . '" class="activity-block">';
 
 		if ( $posts->post_count > $args['display'] ) {
-			echo '<small class="show-more"><a href="#">' . sprintf( __( 'See %s more&hellip;'), $posts->post_count - intval( $args['display'] ) ) . '</a></small>';
+			echo '<small class="show-more hide-if-no-js"><a href="#">' . sprintf( __( 'See %s more&hellip;'), $posts->post_count - intval( $args['display'] ) ) . '</a></small>';
 		}
 
 		echo '<h4>' . $args['title'] . '</h4>';
@@ -571,16 +593,33 @@ function dashboard_show_published_posts( $args ) {
 		echo '<ul>';
 
 		$i = 0;
+		$today    = date( 'Y-m-d', current_time( 'timestamp' ) );
+		$tomorrow = date( 'Y-m-d', strtotime( '+1 day', current_time( 'timestamp' ) ) );
+
 		while ( $posts->have_posts() ) {
 			$posts->the_post();
-			printf(
-				'<li%s><span>%s, %s</span> <a href="%s">%s</a></li>',
-				( $i >= intval ( $args['display'] ) ? ' class="hidden"' : '' ),
-				dashboard_relative_date( get_the_time( 'U' ) ),
-				get_the_time(),
-				get_edit_post_link(),
-				get_the_title()
-			);
+
+			$time = get_the_time( 'U' );
+			if ( date( 'Y-m-d', $time ) == $today ) {
+				$relative = __( 'Today' );
+			} elseif ( date( 'Y-m-d', $time ) == $tomorrow ) {
+				$relative = __( 'Tomorrow' );
+			} else {
+				/* translators: date and time format for recent posts on the dashboard, see http://php.net/date */
+				$relative = date_i18n( __( 'M jS' ), $time );
+			}
+
+ 			$text = sprintf(
+				/* translators: 1: relative date, 2: time, 4: post title */
+ 				__( '<span>%1$s, %2$s</span> <a href="%3$s">%4$s</a>' ),
+  				$relative,
+  				get_the_time(),
+  				get_edit_post_link(),
+  				_draft_or_post_title()
+  			);
+
+ 			$hidden = $i >= $args['display'] ? ' class="hidden"' : '';
+ 			echo "<li{$hidden}>$text</li>";
 			$i++;
 		}
 
@@ -597,14 +636,14 @@ function dashboard_show_published_posts( $args ) {
 }
 
 /**
- * Show `Comments` section
- *
- *
+ * Show Comments section.
  *
  * @since 3.8.0
  *
+ * @param int $total_items Optional. Number of comments to query. Default 5.
+ * @return bool False if no comments were found. True otherwise.
  */
-function dashboard_comments( $total_items = 5 ) {
+function wp_dashboard_recent_comments( $total_items = 5 ) {
 	global $wpdb;
 
 	// Select all comment types and filter out spam later for better query performance.
@@ -655,25 +694,17 @@ function dashboard_comments( $total_items = 5 ) {
 }
 
 /**
- * return relative date for given timestamp
+ * Display generic dashboard RSS widget feed.
  *
+ * @since 2.5.0
  *
- *
- * @since 3.8.0
- *
+ * @param string $widget_id
  */
-function dashboard_relative_date( $time ) {
-
-	$diff = floor( ( $time - time() ) / DAY_IN_SECONDS );
-
-	if ( $diff == 0 )
-		return __( 'Today' );
-
-	if ( $diff == 1 )
-		return __( 'Tomorrow' );
-
-	return date( 'M jS', $time);
-
+function wp_dashboard_rss_output( $widget_id ) {
+	$widgets = get_option( 'dashboard_widget_options' );
+	echo '<div class="rss-widget">';
+	wp_widget_rss_output( $widgets[ $widget_id ] );
+	echo "</div>";
 }
 
 /**
@@ -745,19 +776,60 @@ function wp_dashboard_trigger_widget_control( $widget_control_id = false ) {
 }
 
 /**
- * Returns default WordPress News feeds
+ * The RSS dashboard widget control.
  *
+ * Sets up $args to be used as input to wp_widget_rss_form(). Handles POST data
+ * from RSS-type widgets.
  *
+ * @since 2.5.0
  *
- * @since 3.8.0
- *
+ * @param string $widget_id
+ * @param array $form_inputs
  */
-function wp_dashboard_default_feeds() {
-	return array(
+function wp_dashboard_rss_control( $widget_id, $form_inputs = array() ) {
+	if ( !$widget_options = get_option( 'dashboard_widget_options' ) )
+		$widget_options = array();
+
+	if ( !isset($widget_options[$widget_id]) )
+		$widget_options[$widget_id] = array();
+
+	$number = 1; // Hack to use wp_widget_rss_form()
+	$widget_options[$widget_id]['number'] = $number;
+
+	if ( 'POST' == $_SERVER['REQUEST_METHOD'] && isset($_POST['widget-rss'][$number]) ) {
+		$_POST['widget-rss'][$number] = wp_unslash( $_POST['widget-rss'][$number] );
+		$widget_options[$widget_id] = wp_widget_rss_process( $_POST['widget-rss'][$number] );
+		$widget_options[$widget_id]['number'] = $number;
+		// title is optional. If black, fill it if possible
+		if ( !$widget_options[$widget_id]['title'] && isset($_POST['widget-rss'][$number]['title']) ) {
+			$rss = fetch_feed($widget_options[$widget_id]['url']);
+			if ( is_wp_error($rss) ) {
+				$widget_options[$widget_id]['title'] = htmlentities(__('Unknown Feed'));
+			} else {
+				$widget_options[$widget_id]['title'] = htmlentities(strip_tags($rss->get_title()));
+				$rss->__destruct();
+				unset($rss);
+			}
+		}
+		update_option( 'dashboard_widget_options', $widget_options );
+		$cache_key = 'dash_' . md5( $widget_id );
+		delete_transient( $cache_key );
+	}
+
+	wp_widget_rss_form( $widget_options[$widget_id], $form_inputs );
+}
+
+/**
+ * WordPress News dashboard widget.
+ *
+ * @since 2.7.0
+ */
+function wp_dashboard_primary() {
+	$feeds = array(
 		'news'   => array(
 			'link'         => apply_filters( 'dashboard_primary_link', __( 'http://wordpress.org/news/' ) ),
 			'url'          => apply_filters( 'dashboard_primary_feed', __( 'http://wordpress.org/news/feed/' ) ),
-			'title'        => '',
+			'title'        => apply_filters( 'dashboard_primary_title', __( 'WordPress Blog' ) ),
 			'items'        => 1,
 			'show_summary' => 1,
 			'show_author'  => 0,
@@ -766,166 +838,128 @@ function wp_dashboard_default_feeds() {
 		'planet' => array(
 			'link'         => apply_filters( 'dashboard_secondary_link', __( 'http://planet.wordpress.org/' ) ),
 			'url'          => apply_filters( 'dashboard_secondary_feed', __( 'http://planet.wordpress.org/feed/' ) ),
-			'title'        => '',
+			'title'        => apply_filters( 'dashboard_secondary_title', __( 'Other WordPress News' ) ),
 			'items'        => 3,
 			'show_summary' => 0,
 			'show_author'  => 0,
 			'show_date'    => 0,
-		),
-		'plugins' => array(
+		)
+	);
+
+	if ( ( ! is_multisite() && is_blog_admin() && current_user_can( 'install_plugins' ) ) || ( is_network_admin() && current_user_can( 'manage_network_plugins' ) && current_user_can( 'install_plugins' ) ) ) {
+		$feeds['plugins'] = array(
 			'link'         => '',
 			'url'          => array(
-					'popular' => 'http://wordpress.org/plugins/rss/browse/popular/'
+				'popular' => 'http://wordpress.org/plugins/rss/browse/popular/',
 			),
 			'title'        => '',
 			'items'        => 1,
 			'show_summary' => 0,
 			'show_author'  => 0,
 			'show_date'    => 0,
-		)
-	);
-}
-
-/**
- * Check for cached feeds
- *
- *
- *
- * @since 3.8.0
- *
- */
-function wp_dashboard_rss() {
-	$default_feeds = wp_dashboard_default_feeds();
-
-	$widget_options = get_option( 'dashboard_widget_options' );
-
-	if ( !$widget_options || !is_array($widget_options) )
-		$widget_options = array();
-
-	//if ( ! isset( $widget_options['dashboard_rss'] ) ) {
-		$widget_options['dashboard_rss'] = $default_feeds;
-		update_option( 'dashboard_widget_options', $widget_options );
-	//}
-
-	foreach( $default_feeds as $key => $value ) {
-		$default_urls[] = $value['url'];
+		);
 	}
 
-	$cache_key = 'dash_' . md5( 'dashboard_rss' );
-	delete_transient( $cache_key );
-
-	do_action( 'dashboard_news_beginning' );
-
-	wp_dashboard_cached_rss_widget( 'dashboard_rss', 'wp_dashboard_news_output', $default_urls );
-
-	do_action( 'dashboard_news_end' );
+	wp_dashboard_cached_rss_widget( 'dashboard_primary', 'wp_dashboard_primary_output', $feeds );
 }
 
 /**
- * Display news feeds
- *
- *
+ * Display the WordPress news feeds.
  *
  * @since 3.8.0
  *
+ * @param string $widget_id Widget ID.
+ * @param array  $feeds     Array of RSS feeds.
  */
-function wp_dashboard_news_output() {
-	$widgets = get_option( 'dashboard_widget_options' );
-
-	foreach( $widgets['dashboard_rss'] as $type => $args ) {
+function wp_dashboard_primary_output( $widget_id, $feeds ) {
+	foreach( $feeds as $type => $args ) {
 		$args['type'] = $type;
 		echo '<div class="rss-widget">';
-		wp_widget_news_output( $args['url'], $args );
+		if ( $type === 'plugins' ) {
+			wp_dashboard_plugins_output( $args['url'], $args );
+		} else {
+			wp_widget_rss_output( $args['url'], $args );
+		}
 		echo "</div>";
 	}
 }
 
 /**
- * Generate code for each news feed
+ * Display plugins text for the WordPress news widget.
  *
- *
- *
- * @since 3.8.0
- *
+ * @since 2.5.0
  */
-function wp_widget_news_output( $rss, $args = array() ) {
-
-	// Regular RSS feeds
-	if ( isset( $args['type'] ) && 'plugins' != $args['type'] )
-		return wp_widget_rss_output( $rss, $args );
-
+function wp_dashboard_plugins_output( $rss, $args = array() ) {
 	// Plugin feeds plus link to install them
-	if ( ! is_multisite() && current_user_can( 'install_plugins' ) ) {
-		$popular = fetch_feed( $args['url']['popular'] );
+	$popular = fetch_feed( $args['url']['popular'] );
 
-		if ( false === $plugin_slugs = get_transient( 'plugin_slugs' ) ) {
-			$plugin_slugs = array_keys( get_plugins() );
-			set_transient( 'plugin_slugs', $plugin_slugs, DAY_IN_SECONDS );
-		}
+	if ( false === $plugin_slugs = get_transient( 'plugin_slugs' ) ) {
+		$plugin_slugs = array_keys( get_plugins() );
+		set_transient( 'plugin_slugs', $plugin_slugs, DAY_IN_SECONDS );
+	}
 
-		echo '<ul>';
+	echo '<ul>';
 
-		foreach ( array(
-			'popular' => __( 'Popular Plugin' )
-		) as $feed => $label ) {
-			if ( is_wp_error($$feed) || !$$feed->get_item_quantity() )
+	foreach ( array(
+		'popular' => __( 'Popular Plugin' )
+	) as $feed => $label ) {
+		if ( is_wp_error($$feed) || !$$feed->get_item_quantity() )
+			continue;
+
+		$items = $$feed->get_items(0, 5);
+
+		// Pick a random, non-installed plugin
+		while ( true ) {
+			// Abort this foreach loop iteration if there's no plugins left of this type
+			if ( 0 == count($items) )
+				continue 2;
+
+			$item_key = array_rand($items);
+			$item = $items[$item_key];
+
+			list($link, $frag) = explode( '#', $item->get_link() );
+
+			$link = esc_url($link);
+			if ( preg_match( '|/([^/]+?)/?$|', $link, $matches ) )
+				$slug = $matches[1];
+			else {
+				unset( $items[$item_key] );
 				continue;
-
-			$items = $$feed->get_items(0, 5);
-
-			// Pick a random, non-installed plugin
-			while ( true ) {
-				// Abort this foreach loop iteration if there's no plugins left of this type
-				if ( 0 == count($items) )
-					continue 2;
-
-				$item_key = array_rand($items);
-				$item = $items[$item_key];
-
-				list($link, $frag) = explode( '#', $item->get_link() );
-
-				$link = esc_url($link);
-				if ( preg_match( '|/([^/]+?)/?$|', $link, $matches ) )
-					$slug = $matches[1];
-				else {
-					unset( $items[$item_key] );
-					continue;
-				}
-
-				// Is this random plugin's slug already installed? If so, try again.
-				reset( $plugin_slugs );
-				foreach ( $plugin_slugs as $plugin_slug ) {
-					if ( $slug == substr( $plugin_slug, 0, strlen( $slug ) ) ) {
-						unset( $items[$item_key] );
-						continue 2;
-					}
-				}
-
-				// If we get to this point, then the random plugin isn't installed and we can stop the while().
-				break;
 			}
 
-			// Eliminate some common badly formed plugin descriptions
-			while ( ( null !== $item_key = array_rand($items) ) && false !== strpos( $items[$item_key]->get_description(), 'Plugin Name:' ) )
-				unset($items[$item_key]);
+			// Is this random plugin's slug already installed? If so, try again.
+			reset( $plugin_slugs );
+			foreach ( $plugin_slugs as $plugin_slug ) {
+				if ( $slug == substr( $plugin_slug, 0, strlen( $slug ) ) ) {
+					unset( $items[$item_key] );
+					continue 2;
+				}
+			}
 
-			if ( !isset($items[$item_key]) )
-				continue;
-
-			$title = esc_html( $item->get_title() );
-
-			$description = esc_html( strip_tags( @html_entity_decode( $item->get_description(), ENT_QUOTES, get_option( 'blog_charset' ) ) ) );
-
-			$ilink = wp_nonce_url('plugin-install.php?tab=plugin-information&plugin=' . $slug, 'install-plugin_' . $slug) . '&amp;TB_iframe=true&amp;width=600&amp;height=800';
-
-			echo "<li class='dashboard-news-plugin'><span>$label:</span> <a href='$link' class='dashboard-news-plugin-link'>$title</a></h5>&nbsp;<span>(<a href='$ilink' class='thickbox' title='$title'>" . __( 'Install' ) . "</a>)</span></li>";
-
-			$$feed->__destruct();
-			unset( $$feed );
+			// If we get to this point, then the random plugin isn't installed and we can stop the while().
+			break;
 		}
 
-		echo '</ul>';
+		// Eliminate some common badly formed plugin descriptions
+		while ( ( null !== $item_key = array_rand($items) ) && false !== strpos( $items[$item_key]->get_description(), 'Plugin Name:' ) )
+			unset($items[$item_key]);
+
+		if ( !isset($items[$item_key]) )
+			continue;
+
+		$title = esc_html( $item->get_title() );
+
+		$description = esc_html( strip_tags( @html_entity_decode( $item->get_description(), ENT_QUOTES, get_option( 'blog_charset' ) ) ) );
+
+		$ilink = wp_nonce_url('plugin-install.php?tab=plugin-information&plugin=' . $slug, 'install-plugin_' . $slug) . '&amp;TB_iframe=true&amp;width=600&amp;height=800';
+
+		echo "<li class='dashboard-news-plugin'><span>$label:</span> <a href='$link' class='dashboard-news-plugin-link'>$title</a></h5>&nbsp;<span>(<a href='$ilink' class='thickbox' title='$title'>" . __( 'Install' ) . "</a>)</span></li>";
+
+		$$feed->__destruct();
+		unset( $$feed );
 	}
+
+	echo '</ul>';
 }
 
 /**
@@ -957,21 +991,29 @@ function wp_dashboard_quota() {
 	<div class="mu-storage">
 	<ul>
 		<li class="storage-count">
-			<?php printf(
-				'<a href="%1$s" title="%3$s">%2$sMB %4$s</a>',
+			<?php $text = sprintf(
+				/* translators: number of megabytes */
+				__( '%s MB Space Allowed' ),
+				number_format_i18n( $quota )
+			);
+			printf(
+				'<a href="%1$s" title="%2$s">%3$s</a>',
 				esc_url( admin_url( 'upload.php' ) ),
-				number_format_i18n( $quota ),
 				__( 'Manage Uploads' ),
-				__( 'Space Allowed' )
+				$text
 			); ?>
 		</li><li class="storage-count <?php echo $used_class; ?>">
-			<?php printf(
-				'<a href="%1$s" title="%4$s" class="musublink">%2$sMB (%3$s%%) %5$s</a>',
-				esc_url( admin_url( 'upload.php' ) ),
+			<?php $text = sprintf(
+				/* translators: 1: number of megabytes, 2: percentage */
+				__( '%1$s MB (%2$s%%) Space Used' ),
 				number_format_i18n( $used, 2 ),
-				$percentused,
+				$percentused
+			);
+			printf(
+				'<a href="%1$s" title="%2$s" class="musublink">%3$s</a>',
+				esc_url( admin_url( 'upload.php' ) ),
 				__( 'Manage Uploads' ),
-				__( 'Space Used' )
+				$text
 			); ?>
 		</li>
 	</ul>

@@ -233,9 +233,14 @@ function wp_ajax_autocomplete_user() {
 function wp_ajax_dashboard_widgets() {
 	require_once ABSPATH . 'wp-admin/includes/dashboard.php';
 
+	$pagenow = $_GET['pagenow'];
+	if ( $pagenow === 'dashboard-user' || $pagenow === 'dashboard-network' || $pagenow === 'dashboard' ) {
+		set_current_screen( $pagenow );
+	}
+
 	switch ( $_GET['widget'] ) {
-		case 'dashboard_rss' :
-			wp_dashboard_rss();
+		case 'dashboard_primary' :
+			wp_dashboard_primary();
 			break;
 	}
 	wp_die();
@@ -2244,18 +2249,14 @@ function wp_ajax_get_revision_diffs() {
 function wp_ajax_save_user_color_scheme() {
 	global $_wp_admin_css_colors;
 
-	$user_id = intval( $_POST['user_id'] );
+	check_ajax_referer( 'save-color-scheme', 'nonce' );
+
 	$color_scheme = sanitize_key( $_POST['color_scheme'] );
 
-	if ( get_current_user_id() !== $user_id )
+	if ( ! isset( $_wp_admin_css_colors[ $color_scheme ] ) ) {
 		wp_send_json_error();
+	}
 
-	if ( ! get_user_by( 'id', $user_id ) )
-		wp_send_json_error();
-
-	if ( ! isset( $_wp_admin_css_colors[ $color_scheme ] ) )
-		wp_send_json_error();
-
-	update_user_option( $user_id, 'admin_color', $color_scheme, true );
+	update_user_meta( get_current_user_id(), 'admin_color', $color_scheme );
 	wp_send_json_success();
 }

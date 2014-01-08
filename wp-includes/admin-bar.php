@@ -165,7 +165,7 @@ function wp_admin_bar_wp_menu( $wp_admin_bar ) {
 function wp_admin_bar_sidebar_toggle( $wp_admin_bar ) {
 	if ( is_admin() ) {
 		$wp_admin_bar->add_menu( array(
-			'id'    => 'toggle-button',
+			'id'    => 'menu-toggle',
 			'title' => '<span class="ab-icon"></span>',
 			'href'  => '#',
 			'meta'  => array(
@@ -190,7 +190,7 @@ function wp_admin_bar_my_account_item( $wp_admin_bar ) {
 	if ( ! $user_id )
 		return;
 
-	$avatar = get_avatar( $user_id, 16 );
+	$avatar = get_avatar( $user_id, 26 );
 	$howdy  = sprintf( __('Howdy, %1$s'), $current_user->display_name );
 	$class  = empty( $avatar ) ? '' : 'with-avatar';
 

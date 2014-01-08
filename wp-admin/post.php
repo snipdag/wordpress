@@ -70,6 +70,14 @@ function redirect_post($post_id = '') {
 		$location = add_query_arg( 'message', 4, get_edit_post_link( $post_id, 'url' ) );
 	}
 
+	/**
+	 * Filter the post redirect destination URL.
+	 *
+	 * @since 2.9.0
+	 *
+	 * @param string $location The destination URL.
+	 * @param int    $post_id  The post ID.
+	 */
 	wp_redirect( apply_filters( 'redirect_post_location', $location, $post_id ) );
 	exit;
 }
@@ -99,37 +107,28 @@ case 'post-quickdraft-save':
 	$nonce = $_REQUEST['_wpnonce'];
 	$error_msg = false;
 	if ( ! wp_verify_nonce( $nonce, 'add-post' ) )
-		$error_msg = 'Unable to submit this form, please refresh and try again.';
+		$error_msg = __( 'Unable to submit this form, please refresh and try again.' );
 
 	if ( ! current_user_can( 'edit_posts' ) )
-		$error_msg = "Oops, you don't have access to add new drafts.";
+		$error_msg = __( 'Oops, you don&#8217;t have access to add new drafts.' );
 
 	if ( $error_msg )
-		return wp_dashboard_quick_draft( $error_msg );
+		return wp_dashboard_quick_press( $error_msg );
 
 	$post = get_post( $_REQUEST['post_ID'] );
 	check_admin_referer( 'add-' . $post->post_type );
 	edit_post();
 	// output the quickdraft dashboard widget
 	require_once(ABSPATH . 'wp-admin/includes/dashboard.php');
-	wp_dashboard_quick_draft();
+	wp_dashboard_quick_press();
 	exit;
 	break;
 
 case 'postajaxpost':
 case 'post':
-	// Check nonce and capabilities
-	$nonce = $_REQUEST['_wpnonce'];
-	$error_msg = false;
-	if ( ! wp_verify_nonce( $nonce, 'add-post' ) )
-		$error_msg = 'Unable to submit this form, please refresh and try again.';
-
-	if ( ! current_user_can( 'edit_posts' ) )
-		$error_msg = "Oops, you don't have access to add new drafts.";
-
+	check_admin_referer( 'add-' . $post_type );
 	$post_id = 'postajaxpost' == $action ? edit_post() : write_post();
-
-	redirect_post($post_id);
+	redirect_post( $post_id );
 	exit();
 	break;
 

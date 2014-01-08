@@ -1,19 +1,22 @@
+/* global pagenow, ajaxurl, postboxes, wpActiveEditor:true */
 var ajaxWidgets, ajaxPopulateWidgets, quickPressLoad;
 
 jQuery(document).ready( function($) {
-	/* Dashboard Welcome Panel */
-	var welcomePanel = $('#welcome-panel'),
+	var welcomePanel = $( '#welcome-panel' ),
 		welcomePanelHide = $('#wp_welcome_panel-hide'),
-	 	updateWelcomePanel = function( visible ) {
-			$.post( ajaxurl, {
-				action: 'update-welcome-panel',
-				visible: visible,
-				welcomepanelnonce: $('#welcomepanelnonce').val()
-			});
-		};
+		updateWelcomePanel;
 
-	if ( welcomePanel.hasClass('hidden') && welcomePanelHide.prop('checked') )
+	updateWelcomePanel = function( visible ) {
+		$.post( ajaxurl, {
+			action: 'update-welcome-panel',
+			visible: visible,
+			welcomepanelnonce: $( '#welcomepanelnonce' ).val()
+		});
+	};
+
+	if ( welcomePanel.hasClass('hidden') && welcomePanelHide.prop('checked') ) {
 		welcomePanel.removeClass('hidden');
+	}
 
 	$('.welcome-panel-close, .welcome-panel-dismiss a', welcomePanel).click( function(e) {
 		e.preventDefault();
@@ -28,9 +31,7 @@ jQuery(document).ready( function($) {
 	});
 
 	// These widgets are sometimes populated via ajax
-	ajaxWidgets = [
-		'dashboard_rss'
-	];
+	ajaxWidgets = ['dashboard_primary'];
 
 	ajaxPopulateWidgets = function(el) {
 		function show(i, id) {
@@ -38,7 +39,7 @@ jQuery(document).ready( function($) {
 			if ( e.length ) {
 				p = e.parent();
 				setTimeout( function(){
-					p.load( ajaxurl + '?action=dashboard-widgets&widget=' + id, '', function() {
+					p.load( ajaxurl + '?action=dashboard-widgets&widget=' + id + '&pagenow=' + pagenow, '', function() {
 						p.hide().slideDown('normal', function(){
 							$(this).css('display', '');
 						});
@@ -49,8 +50,9 @@ jQuery(document).ready( function($) {
 
 		if ( el ) {
 			el = el.toString();
-			if ( $.inArray(el, ajaxWidgets) != -1 )
+			if ( $.inArray(el, ajaxWidgets) !== -1 ) {
 				show(0, el);
+			}
 		} else {
 			$.each( ajaxWidgets, show );
 		}
@@ -63,12 +65,12 @@ jQuery(document).ready( function($) {
 	quickPressLoad = function() {
 		var act = $('#quickpost-action'), t;
 		t = $('#quick-press').submit( function() {
-			$('#dashboard_quick_draft #publishing-action .spinner').show();
+			$('#dashboard_quick_press #publishing-action .spinner').show();
 			$('#quick-press .submit input[type="submit"], #quick-press .submit input[type="reset"]').prop('disabled', true);
 
 			$.post( t.attr( 'action' ), t.serializeArray(), function( data ) {
 				// Replace the form, and prepend the published post.
-				$('#dashboard_quick_draft .inside').html( data );
+				$('#dashboard_quick_press .inside').html( data );
 				$('#quick-press').removeClass('initial-form');
 				quickPressLoad();
 				highlightLatestPost();
@@ -76,7 +78,7 @@ jQuery(document).ready( function($) {
 			});
 
 			function highlightLatestPost () {
-				var latestPost = $('#draft-list li').first();
+				var latestPost = $('.drafts ul li').first();
 				latestPost.css('background', '#fffbe5');
 				setTimeout(function () {
 					latestPost.css('background', 'none');
@@ -91,8 +93,9 @@ jQuery(document).ready( function($) {
 		$('#title, #tags-input, #content').each( function() {
 			var input = $(this), prompt = $('#' + this.id + '-prompt-text');
 
-			if ( '' === this.value )
+			if ( '' === this.value ) {
 				prompt.removeClass('screen-reader-text');
+			}
 
 			prompt.click( function() {
 				$(this).addClass('screen-reader-text');
@@ -100,8 +103,9 @@ jQuery(document).ready( function($) {
 			});
 
 			input.blur( function() {
-				if ( '' === this.value )
+				if ( '' === this.value ) {
 					prompt.removeClass('screen-reader-text');
+				}
 			});
 
 			input.focus( function() {
@@ -110,39 +114,76 @@ jQuery(document).ready( function($) {
 		});
 
 		$('#quick-press').on( 'click focusin', function() {
-			$(this).addClass("quickpress-open");
-			$("#description-wrap, p.submit").slideDown(200);
 			wpActiveEditor = 'content';
 		});
+
+		autoResizeTextarea();
 	};
 	quickPressLoad();
+
+	$( '.meta-box-sortables' ).sortable( 'option', 'containment', 'document' );
 
 	// Activity Widget
 	$( '.show-more a' ).on( 'click', function(e) {
 		$( this ).fadeOut().closest('.activity-block').find( 'li.hidden' ).fadeIn().removeClass( 'hidden' );
 		e.preventDefault();
-	})
-
-	// Dashboard columns
-	jQuery(document).ready(function ($) {
-		// Update main column count on load
-		updateColumnCount();
 	});
 
-	jQuery(window).resize( _.debounce( function(){
-		updateColumnCount();
-	}, 30) );
+	function autoResizeTextarea() {
+		// Add a hidden div. We'll copy over the text from the textarea to measure its height.
+		$('body').append( '<div class="quick-draft-textarea-clone" style="display: none;"></div>' );
 
-	function updateColumnCount() {
-		var cols = 1,
-			windowWidth = parseInt(jQuery(window).width());
-		if (799 < windowWidth && 1299 > windowWidth)
-			cols = 2;
-		if (1300 < windowWidth && 1799 > windowWidth)
-			cols = 3;
-		if (1800 < windowWidth)
-			cols = 4;
-		jQuery('.metabox-holder').attr('class', jQuery('.metabox-holder').attr('class').replace(/columns-\d+/, 'columns-' + cols));
+		var clone = $('.quick-draft-textarea-clone'),
+			editor = $('#content'),
+			editorHeight = editor.height(),
+			// 100px roughly accounts for browser chrome and allows the
+			// save draft button to show on-screen at the same time.
+			editorMaxHeight = $(window).height() - 100;
+
+		// Match up textarea and clone div as much as possible.
+		// Padding cannot be reliably retrieved using shorthand in all browsers.
+		clone.css({
+			'font-family': editor.css('font-family'),
+			'font-size':   editor.css('font-size'),
+			'line-height': editor.css('line-height'),
+			'padding-bottom': editor.css('paddingBottom'),
+			'padding-left': editor.css('paddingLeft'),
+			'padding-right': editor.css('paddingRight'),
+			'padding-top': editor.css('paddingTop'),
+			'white-space': 'pre-wrap',
+			'word-wrap': 'break-word',
+			'display': 'none'
+		});
+
+		// propertychange is for IE < 9
+		editor.on('focus input propertychange', function() {
+			var $this = $(this),
+				// &nbsp; is to ensure that the height of a final trailing newline is included.
+				textareaContent = $this.val().replace(/\n/g, '<br>') + '&nbsp;',
+				// 2px is for border-top & border-bottom
+				cloneHeight = clone.css('width', $this.css('width')).html(textareaContent).outerHeight() + 2;
+
+			// Default to having scrollbars
+			editor.css('overflow-y', 'auto');
+
+			// Only change the height if it has indeed changed and both heights are below the max.
+			if ( cloneHeight === editorHeight || ( cloneHeight >= editorMaxHeight && editorHeight >= editorMaxHeight ) ) {
+				return;
+			}
+
+			// Don't allow editor to exceed height of window.
+			// This is also bound in CSS to a max-height of 1300px to be extra safe.
+			if ( cloneHeight > editorMaxHeight ) {
+				editorHeight = editorMaxHeight;
+			} else {
+				editorHeight = cloneHeight;
+			}
+
+			// No scrollbars as we change height
+			editor.css('overflow-y', 'hidden');
+
+			$this.css('height', editorHeight + 'px');
+		});
 	}
 
 } );
